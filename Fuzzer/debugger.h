@@ -23,4 +23,5 @@ private:
 };
 
 } // namespace MyProgram
+
 #endif // _DEBUGGER_H

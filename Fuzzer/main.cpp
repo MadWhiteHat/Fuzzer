@@ -20,6 +20,8 @@ inline void Usage() {
 		<< LEVEL << "7 - Run with current confing\n"
 		<< LEVEL << "8 - Autofuzzing change bytes\n"
 		<< LEVEL << "9 - Autofuzzing append bytes\n"
+		<< LEVEL << "10 - Print current config\n"
+		<< LEVEL << "11 - Save current config\n"
 		<< LEVEL << "0 - exit program\n";
 }
 
@@ -30,7 +32,7 @@ int main(const int argc, const char** argv) {
 	std::string __configName;
 	size_t __choice = 0;
 	
-	if (__argc == 1) {
+	if (argc == 1) {
 		std::cout << "Pass a variant number as an argument\n";
 		return 0;
 	}
@@ -155,11 +157,25 @@ int main(const int argc, const char** argv) {
 				break;
 			}
 			case 6: {
-				__fuzzer.LoadFile();
+				__fuzzer.Backup();
+				__fuzzer.LoadConfig();
 				break;
 			}
 			case 7:
 				__fuzzer.DryRun();
+				break;
+
+			case 8:
+				__fuzzer.ChangeAutoFuzzer();
+				break;
+			case 9:
+				__fuzzer.AppendAutoFuzzer();
+				break;
+			case 10:
+				__fuzzer.PrintConfig();
+				break;
+			case 11:
+				__fuzzer.SaveConfig();
 				break;
 		}
 		system("pause");

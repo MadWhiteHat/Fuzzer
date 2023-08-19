@@ -3,9 +3,9 @@
 #include <sstream>
 #include <iomanip>
 #include <vector>
-#include "windows.h"
-#include "processthreadsapi.h"
-#include "Dbghelp.h"
+#include <windows.h>
+#include <processthreadsapi.h>
+#include <dbghelp.h>
 
 #include "debugger.h"
 #include "utility.h"
@@ -41,10 +41,10 @@ MyProgram::Debugger::Run() {
       << std::setw(8) << GetLastError();
     _Log(__msg.str(), true);
   }
+
   DEBUG_EVENT __debugEvent = { 0 };
   while (true) {
     if (!WaitForDebugEvent(&__debugEvent, _waitTime)) {
-      DWORD __exitCode;
       GetExitCodeProcess(__procInfo.hProcess, &__exitCode);
       if (__exitCode != STILL_ACTIVE) {
         __msg << "Test no Exception. ExitCode: 0x" << std::hex << std::setw(8)
@@ -55,17 +55,21 @@ MyProgram::Debugger::Run() {
     }
     if (__debugEvent.dwDebugEventCode == EXCEPTION_DEBUG_EVENT) {
       __exitCode = _DebugEventInfo(__debugEvent, __procInfo);
+      if (__exitCode != EXCEPTION_BREAKPOINT) { break; }
     }
-    ContinueDebugEvent(__debugEvent.dwProcessId, __debugEvent.dwThreadId, DBG_CONTINUE);
+    ContinueDebugEvent(
+      __debugEvent.dwProcessId,
+      __debugEvent.dwThreadId,
+      DBG_CONTINUE
+    );
   }
-  TerminateProcess(__procInfo.hProcess, GetLastError());
+  TerminateProcess(__procInfo.hProcess, GetLastError());  
   return __exitCode;
 }
 
 DWORD
 MyProgram::Debugger::
 _DebugEventInfo(DEBUG_EVENT& __debugEvent, PROCESS_INFORMATION& __procInfo) {
-  DWORD __retVal = 0;
   CONTEXT __context;
   std::stringstream __msg;
   std::string __exTextCode;
@@ -139,24 +143,24 @@ _DebugEventInfo(DEBUG_EVENT& __debugEvent, PROCESS_INFORMATION& __procInfo) {
           << __debugEvent.u.Exception.ExceptionRecord.ExceptionAddress
           << " " << __exTextCode << " code: 0x" << std::setw(8)
           << __debugEvent.u.Exception.ExceptionRecord.ExceptionCode << "\n"
-          << "EAX = 0x" << std::setw(8) << __context.Eax
-          << "EBX = 0x" << std::setw(8) << __context.Ebx
-          << "ECX = 0x" << std::setw(8) << __context.Ecx
-          << "EDX = 0x" << std::setw(8) << __context.Edx
-          << "ESI = 0x" << std::setw(8) << __context.Esi
-          << "EDI = 0x" << std::setw(8) << __context.Edi
-          << "EIP = 0x" << std::setw(8) << __context.Eip
-          << "ESP = 0x" << std::setw(8) << __context.Esp
-          << "EBP = 0x" << std::setw(8) << __context.Ebp
-          << "EFL = 0x" << std::setw(8) << __context.EFlags
-          << "CS = 0x" << std::setw(4) << __context.SegCs
-          << "DS = 0x" << std::setw(4) << __context.SegDs
-          << "ES = 0x" << std::setw(4) << __context.SegEs
-          << "FS = 0x" << std::setw(4) << __context.SegFs
-          << "GS = 0x" << std::setw(4) << __context.SegGs
+          << "EAX = 0x" << std::setw(8) << __context.Eax << ' '
+          << "EBX = 0x" << std::setw(8) << __context.Ebx << '\n'
+          << "ECX = 0x" << std::setw(8) << __context.Ecx << ' '
+          << "EDX = 0x" << std::setw(8) << __context.Edx << '\n'
+          << "ESI = 0x" << std::setw(8) << __context.Esi << ' '
+          << "EDI = 0x" << std::setw(8) << __context.Edi << '\n'
+          << "EIP = 0x" << std::setw(8) << __context.Eip << ' '
+          << "ESP = 0x" << std::setw(8) << __context.Esp << '\n'
+          << "EBP = 0x" << std::setw(8) << __context.Ebp << ' '
+          << "EFL = 0x" << std::setw(8) << __context.EFlags << '\n'
+          << "CS = 0x" << std::setw(4) << __context.SegCs << ' '
+          << "DS = 0x" << std::setw(4) << __context.SegDs << '\n'
+          << "ES = 0x" << std::setw(4) << __context.SegEs << ' '
+          << "FS = 0x" << std::setw(4) << __context.SegFs << '\n'
+          << "GS = 0x" << std::setw(4) << __context.SegGs << '\n'
           << "ContextFlags = 0x" << std::setw(8) << __context.ContextFlags
           << "\n";
-        int32_t __length = __context.Ebp - __context.Esp;
+        DWORD __length = __context.Ebp - __context.Esp;
         if (__length > 0) {
           __stackDump = new(std::nothrow) uint8_t[__length];
           if (__stackDump != nullptr) {
@@ -167,8 +171,8 @@ _DebugEventInfo(DEBUG_EVENT& __debugEvent, PROCESS_INFORMATION& __procInfo) {
               __length, &__totalRead);
             __msg << "Stack frame:";
             if (__length > 0x40) { __length = 0x40; }
-            for (int32_t i = 0; i < __length; ++i) {
-              __msg << " 0x" << std::setw(2) << __stackDump[i];
+            for (DWORD i = 0; i < __length; ++i) {
+              __msg << " 0x" << std::setw(2) << uint32_t(__stackDump[i]);
             }
             __msg << "\n";
           }
@@ -182,7 +186,7 @@ _DebugEventInfo(DEBUG_EVENT& __debugEvent, PROCESS_INFORMATION& __procInfo) {
         __stackFrame.AddrFrame.Offset = __context.Ebp;
         __stackFrame.AddrFrame.Mode = AddrModeFlat;
         int32_t __depth = 0;
-        __msg << "Call stack:";
+        __msg << "Call stack:\n";
         while (StackWalk64(
             IMAGE_FILE_MACHINE_I386,
           __procInfo.hProcess,
@@ -192,12 +196,13 @@ _DebugEventInfo(DEBUG_EVENT& __debugEvent, PROCESS_INFORMATION& __procInfo) {
           NULL, NULL, NULL, NULL
         )) {
           if (__stackFrame.AddrFrame.Offset == 0) { break; }
-          __msg << "\n#" << std::dec << ++__depth << std::hex << std::setw(16)
-            << __stackFrame.AddrPC.Offset;
+          __msg << "#" << std::dec << ++__depth << ' ' <<  std::hex
+            << std::setw(16) << __stackFrame.AddrPC.Offset << '\n';
         }
         _Log(__msg.str() , true);
       }
     }
+    return __exCode;
   } else {
     __msg << "Debugger cannot get thread context. Error: " << GetLastError();
     _Log(__msg.str(), true);
@@ -208,7 +213,7 @@ _DebugEventInfo(DEBUG_EVENT& __debugEvent, PROCESS_INFORMATION& __procInfo) {
 void
 MyProgram::Debugger::
 _Log(const std::string& __msg, bool __verbose) {
-  std::string __log("debugger.log");
+  std::string __log(LOG_FILE_NAME);
   if (__verbose) { std::cout << __msg << "\n"; }
   MyProgram::Log(__log, __msg);
 }

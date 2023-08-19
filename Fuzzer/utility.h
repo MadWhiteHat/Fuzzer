@@ -5,6 +5,8 @@
 #include <fstream>
 #include <string>
 
+#define LOG_FILE_NAME "program.log"
+
 namespace MyProgram {
 
 void Log(const std::string& __logFilename, const std::string& __msg);

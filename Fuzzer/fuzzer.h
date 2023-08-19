@@ -6,6 +6,9 @@
 #include <vector>
 #include <windows.h>
 
+#define BACKUP_DIR ".\\backup"
+#define DLL "func.dll"
+
 #include "debugger.h"
 
 namespace MyProgram {
@@ -21,16 +24,16 @@ public:
 
 	void
   SetDividingSigns(const std::vector<uint8_t>& __divs);
+	bool
+  FindDividings();
 
 	void
   ChangeBytes(size_t __offset, uint32_t __bytes, size_t __count);
-
 	void
   ChangeRandBytes(size_t __offset, size_t __count);
 
 	void
   InsertByte(size_t __offset, uint8_t __code, size_t __count);
-
 	void
   InsertRandomByte(size_t __offset, size_t __count);
 
@@ -39,27 +42,38 @@ public:
 
 	void
   ExpandFields(size_t __offset, uint32_t __code, size_t __count);
-
 	void
   ExpandFieldsRandom(size_t __offset, size_t __count);
 
 	void
+  Backup();
+
+	void
+  PrintConfig();
+
+	bool
+  LoadConfig();
+
+	bool
+  SaveConfig();
+
+	DWORD
   DryRun();
 
-	bool
-  FindDividings();
+	void
+	ChangeAutoFuzzer();
 
-	bool
-  LoadFile();
+	void
+  AppendAutoFuzzer();
 
 private:
-	void
+	uint8_t
   _ChangeByte(size_t __offset, uint8_t __code, bool __verbose = false);
 
-	void
+	uint16_t
   _ChangeWord(size_t __offset, uint16_t __code, bool __verbose = false);
 
-	void
+	uint32_t
   _ChangeDWord(size_t __offset, uint32_t __code, bool __verbose = false);
 
 	void
@@ -67,9 +81,6 @@ private:
 
 	uint8_t
   _RandomByte();
-
-	bool
-  _SaveFile();
 
 	size_t
   _FindDividings(size_t __offset);
