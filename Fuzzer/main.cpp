@@ -18,8 +18,8 @@ inline void Usage() {
 		<< LEVEL << "5 - Expand fields\n"
 		<< LEVEL << "6 - Reload original config file\n"
 		<< LEVEL << "7 - Run with current confing\n"
-		<< LEVEL << "8 - Autofuzzing change bytes\n"
-		<< LEVEL << "9 - Autofuzzing append bytes\n"
+		<< LEVEL << "8 - Autofuzzing change bytes in original config\n"
+		<< LEVEL << "9 - Autofuzzing append bytes in original config\n"
 		<< LEVEL << "10 - Print current config\n"
 		<< LEVEL << "11 - Save current config\n"
 		<< LEVEL << "0 - exit program\n";

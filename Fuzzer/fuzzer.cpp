@@ -116,8 +116,8 @@ FindDividings() {
     do {
       std::stringstream __msg;
       __msg.fill('0');
-      __msg << "Dividing field found - " << _data[__pos] << "hex 0x"
-        << std::setw(2) << std::hex << uint8_t(_data[__pos]) << " offset: 0x"
+      __msg << "Dividing field found - " << _data[__pos] << " hex 0x"
+        << std::setw(2) << std::hex << uint32_t(_data[__pos]) << " offset: 0x"
         << std::setw(16) << __pos;
       _Log(__msg.str(), true);
       __pos = _FindDividings(__pos + 1);
@@ -136,54 +136,62 @@ ChangeBytes(size_t __offset, uint32_t __bytes, size_t __count) {
     _Log("Config file not loaded", true);
     return;
   }
-  if (__offset < __len) {
-    if (__bytes <= 0xff) {
-      uint8_t __tmp;
-      for (size_t i = 0; i < __len - __offset; ++i) {
-        __tmp = _data[__offset + i];
-        _ChangeByte(__offset + i, uint8_t(__bytes), true);
-        ++__counter;
-        if (__counter >= __count && __count != 0) { break; }
-      }
-    } else if (__bytes > 0xff && __bytes <= 0xffff) {
-      uint16_t __tmp;
-      for (size_t i = 0; i < __len - __offset - 1; ++i) {
-        __tmp = (_data[__offset + i + 1] << 8) + _data[__offset + i];
-        _ChangeWord(__offset + i, uint16_t(__bytes), true);
-        ++__counter;
-        if (__counter >= __count && __count != 0) { break; }
-      }
-    } else if (__bytes > 0xffff) {
-      uint32_t __tmp;
-      for (size_t i = 0; i < __len - __offset - 3; i++) {
-        __tmp = (_data[__offset + i + 3] << 24) + (_data[__offset + i + 2] << 16)
-          + (_data[__offset + i + 1] << 8) + _data[__offset + i];
-        _ChangeDWord(__offset + i, __bytes, true);
-        ++__counter;
-        if (__counter >= __count && __count != 0) { break; }
-      }
+
+  if (__offset > __len - 1) {
+    _Log("Offset greater than file size", true);
+    return;
+  }
+
+  if (__bytes <= 0xff) {
+    uint8_t __tmp;
+    for (size_t i = 0; i < __len - __offset; ++i) {
+      __tmp = _data[__offset + i];
+      _ChangeByte(__offset + i, uint8_t(__bytes), true);
+      ++__counter;
+      if (__counter >= __count && __count != 0) { break; }
     }
-  }	else { _Log("Offset greater than file size", true); }
-  return;
+  } else if (__bytes > 0xff && __bytes <= 0xffff) {
+    uint16_t __tmp;
+    for (size_t i = 0; i < __len - __offset - 1; ++i) {
+      __tmp = (_data[__offset + i + 1] << 8) + _data[__offset + i];
+      _ChangeWord(__offset + i, uint16_t(__bytes), true);
+      ++__counter;
+      if (__counter >= __count && __count != 0) { break; }
+    }
+  } else if (__bytes > 0xffff) {
+    uint32_t __tmp;
+    for (size_t i = 0; i < __len - __offset - 3; ++i) {
+      __tmp = (_data[__offset + i + 3] << 24) + (_data[__offset + i + 2] << 16)
+        + (_data[__offset + i + 1] << 8) + _data[__offset + i];
+      _ChangeDWord(__offset + i, __bytes, true);
+      ++__counter;
+      if (__counter >= __count && __count != 0) { break; }
+    }
+  }
 }
 
 void 
 MyProgram::Fuzzer::
 ChangeRandBytes(size_t __offset, size_t __count) {
-  uint8_t __tmp;
   size_t __len = _data.size();
+  size_t __counter = 0;
+  uint8_t __tmp;
+
   if (__len == 0) {
     _Log("Config file not loaded", true);
     return;
   }
-  if (__offset >= __len - 1) {
+
+  if (__offset > __len - 1) {
     _Log("Offset greater than file size", true);
     return;
   }
-  for (size_t i = 0; i < __count; i++) {
+
+  for (size_t i = 0; i < __len - __offset; ++i) {
     __tmp = _RandomByte();
     _ChangeByte(__offset + i, __tmp, true);
-    if (__offset + i >= __len - 1) { break; }
+    ++__counter;
+    if (__counter >= __count && __count != 0) { break; }
   }
 }
 
@@ -203,9 +211,9 @@ InsertByte(size_t __offset, uint8_t __code, size_t __count) {
       << std::hex << std::setw(2) << uint32_t(__code);
   }	else {
     _data.insert(_data.begin() + __offset, __count, __code);
-    __msg << "Fuzzer add to offset: 0x" << std::setw(16) << std::hex << __offset
-      << ' ' << std::dec << __count << " bytes 0x" << std::setw(2) << std::hex
-      << uint32_t(__code);
+    __msg << "Fuzzer add to offset: 0x" << std::setw(16)
+      << std::hex << __offset << ' ' << std::dec << __count
+      << " bytes 0x" << std::setw(2) << std::hex << uint32_t(__code);
   }
   _Log(__msg.str(), true);
 }
@@ -225,15 +233,15 @@ InsertRandomByte(size_t __offset, size_t __count) {
     __msg << "Fuzzer insert random bytes to end of file:";
     for (size_t i = 0; i < __count; ++i) {
       __tmp = _RandomByte();
-      __msg << " 0x" << std::setw(2) << uint32_t(__tmp);
+      __msg << " 0x" << std::setw(2) << std::hex << uint32_t(__tmp) << std::dec;
       _data.push_back(__tmp);
     }
   }	else {
     __msg << "Fuzzer insert random bytes to offset: 0x"
-      << std::hex << std::setw(16) << __offset << ":" << std::dec;
+      << std::hex << std::setw(16) << __offset << " : " << std::dec;
     for (size_t i = 0; i < __count; ++i) {
       __tmp = _RandomByte();
-      __msg << __count << " 0x" << std::setw(2) << std::hex
+      __msg << " 0x" << std::setw(2) << std::hex
         << uint32_t(__tmp) << " ";
       _data.insert(_data.begin() + __offset + i, 1, __tmp);
     }
@@ -245,17 +253,38 @@ InsertRandomByte(size_t __offset, size_t __count) {
 void
 MyProgram::Fuzzer::
 DeleteByte(size_t __offset, size_t __count) {
-  size_t __len = _data.size();
+  std::vector<uint8_t> __deleted;
   std::stringstream __msg;
+  size_t __len = _data.size();
+
   if (__len == 0) {
     _Log("Config file not loaded", true);
     return;
   }
-  if (__offset >= __len) {
+  if (__offset > __len - 1) {
     _Log("Offset greater than file size", true);
     return;
   }
-  _data.erase(_data.begin() + __offset, _data.begin() + __offset + __count);
+
+  auto __begIt = _data.begin() + __offset;
+  auto __endIt = __begIt;
+
+  if (__offset + __count > __len) {
+    std::cout << "Count is to large... Removing bytes till EOF\n";
+    __endIt = _data.end();
+  } else { __endIt = __begIt + __count; }
+
+  __deleted.assign(__begIt, __endIt);
+  _data.erase(__begIt, __endIt);
+
+  __msg.fill('0');
+  __msg << "Fuzzer deleted " << __deleted.size() << " bytes from offset: 0x"
+    << std::hex << std::setw(16) << __offset << " : " << std::dec;
+  for (const auto& __el : __deleted) {
+    __msg << " 0x" << std::setw(2) << std::hex << uint32_t(__el) << std::dec;
+  }
+
+  _Log(__msg.str(), true);
 }
 
 void
@@ -371,6 +400,7 @@ DryRun() {
 void
 MyProgram::Fuzzer::
 ChangeAutoFuzzer() {
+  Backup();
 
   // Run program until all replacement occurs
   // byte
@@ -425,10 +455,19 @@ ChangeAutoFuzzer() {
 void
 MyProgram::Fuzzer::
 AppendAutoFuzzer() {
+  Backup();
 
-  // Run program till first crash
-  while (true) {
+  // Run program till first crash or all possible values is over
+
+  uint16_t __cnt;
+  
+  __cnt = _ChangeWord(16, 0x00, false);
+
+  for (uint16_t i = 1; i != 0; ++i) {
    InsertByte(_data.size(), _RandomByte(), 1);
+
+   _ChangeWord(16, __cnt + i, false);
+
    SaveConfig();
    if (DryRun()) { break; }
   }
