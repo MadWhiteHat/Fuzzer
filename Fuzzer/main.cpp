@@ -11,18 +11,18 @@
 inline void Usage() {
 	std::cout << "Program for fuzzing config file\n"
 		<< "Valid parameters for execution:\n"
-		<< LEVEL << "1 - Find dividing fields\n"
-		<< LEVEL << "2 - Change bytes in file\n"
-		<< LEVEL << "3 - Add bytes to file\n"
-		<< LEVEL << "4 - Delete bytes from file\n"
-		<< LEVEL << "5 - Expand fields\n"
-		<< LEVEL << "6 - Reload original config file\n"
-		<< LEVEL << "7 - Run with current confing\n"
-		<< LEVEL << "8 - Autofuzzing change bytes in original config\n"
-		<< LEVEL << "9 - Autofuzzing append bytes in original config\n"
+		<< LEVEL << "0 - Exit program\n"
+		<< LEVEL << "1 - Autofuzzing change bytes in original config\n"
+		<< LEVEL << "2 - Autofuzzing append bytes in original config\n"
+		<< LEVEL << "3 - Change bytes in file\n"
+		<< LEVEL << "4 - Add bytes to file\n"
+		<< LEVEL << "5 - Delete bytes from file\n"
+		<< LEVEL << "6 - Find dividing fields\n"
+		<< LEVEL << "7 - Expand fields\n"
+		<< LEVEL << "8 - Reload original config file\n"
+		<< LEVEL << "9 - Run with current confing\n"
 		<< LEVEL << "10 - Print current config\n"
-		<< LEVEL << "11 - Save current config\n"
-		<< LEVEL << "0 - exit program\n";
+		<< LEVEL << "11 - Save current config\n";
 }
 
 int main(const int argc, const char** argv) {
@@ -64,11 +64,13 @@ int main(const int argc, const char** argv) {
 
 		switch (__choice) {
 			case 0: { return 0; }
-			case 1: {
-				__fuzzer.FindDividings();
+			case 1:
+				__fuzzer.ChangeAutoFuzzer();
 				break;
-			}
-			case 2: {
+			case 2:
+				__fuzzer.AppendAutoFuzzer();
+				break;
+			case 3: {
 				size_t __inner_choice;
 				size_t __offset;
 				uint32_t __bytes;
@@ -93,7 +95,7 @@ int main(const int argc, const char** argv) {
 				}
 				break;
 			}
-			case 3: {
+			case 4: {
 				size_t __inner_choice;
 				size_t __offset;
 				uint16_t __byte;
@@ -118,7 +120,7 @@ int main(const int argc, const char** argv) {
 				}
 				break;
 			}
-			case 4: {
+			case 5: {
 				size_t __offset;
 				size_t __count;
 				std::cout << "Input start offset: ";
@@ -128,7 +130,10 @@ int main(const int argc, const char** argv) {
 				__fuzzer.DeleteByte(__offset, __count);
 				break;
 			}
-			case 5: {
+			case 6:
+				__fuzzer.FindDividings();
+				break;
+			case 7: {
 				size_t __inner_choice;
 				size_t __offset;
 				uint32_t __bytes;
@@ -143,33 +148,24 @@ int main(const int argc, const char** argv) {
 				std::cin >> __inner_choice;
 				switch (__inner_choice) {
 					case 1: {
-						__fuzzer.ExpandFieldsRandom(__offset, __count);
-						break;
-						}
+            __fuzzer.ExpandFieldsRandom(__offset, __count);
+            break;
+          }
 					case 2: {
-						std::cout << "Input bytes to change (Max value: 0xFFFFFFFF): ";
-						std::cin >> std::hex >> __bytes >> std::dec;
-						__fuzzer.ExpandFields(__offset, (uint32_t)__bytes, __count);
-						break;
-						}
-						break;
-					}
+            std::cout << "Input bytes to change (Max value: 0xFFFFFFFF): ";
+            std::cin >> std::hex >> __bytes >> std::dec;
+            __fuzzer.ExpandFields(__offset, (uint32_t)__bytes, __count);
+            break;
+          }
+        }
 				break;
 			}
-			case 6: {
+			case 8:
 				__fuzzer.Backup();
 				__fuzzer.LoadConfig();
 				break;
-			}
-			case 7:
-				__fuzzer.DryRun();
-				break;
-
-			case 8:
-				__fuzzer.ChangeAutoFuzzer();
-				break;
 			case 9:
-				__fuzzer.AppendAutoFuzzer();
+				__fuzzer.DryRun();
 				break;
 			case 10:
 				__fuzzer.PrintConfig();
