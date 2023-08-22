@@ -152,7 +152,7 @@ ChangeBytes(size_t __offset, uint32_t __bytes, size_t __count) {
     }
   } else if (__bytes > 0xff && __bytes <= 0xffff) {
     uint16_t __tmp;
-    for (size_t i = 0; i < __len - __offset - 1; ++i) {
+    for (size_t i = 0; i < __len - __offset - 1; i+=2) {
       __tmp = (_data[__offset + i + 1] << 8) + _data[__offset + i];
       _ChangeWord(__offset + i, uint16_t(__bytes), true);
       ++__counter;
@@ -160,7 +160,7 @@ ChangeBytes(size_t __offset, uint32_t __bytes, size_t __count) {
     }
   } else if (__bytes > 0xffff) {
     uint32_t __tmp;
-    for (size_t i = 0; i < __len - __offset - 3; ++i) {
+    for (size_t i = 0; i < __len - __offset - 3; i+=4) {
       __tmp = (_data[__offset + i + 3] << 24) + (_data[__offset + i + 2] << 16)
         + (_data[__offset + i + 1] << 8) + _data[__offset + i];
       _ChangeDWord(__offset + i, __bytes, true);
