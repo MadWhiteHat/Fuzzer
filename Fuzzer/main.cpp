@@ -1,5 +1,4 @@
 #include <iostream>
-#include <filesystem>
 
 
 #include "fuzzer.h"
@@ -22,7 +21,8 @@ inline void Usage() {
 		<< LEVEL << "8 - Reload original config file\n"
 		<< LEVEL << "9 - Run with current confing\n"
 		<< LEVEL << "10 - Print current config\n"
-		<< LEVEL << "11 - Save current config\n";
+		<< LEVEL << "11 - Save current config\n"
+		<< LEVEL << "12 - Create exploit config (require shellcode.bin file)\n";
 }
 
 int main(const int argc, const char** argv) {
@@ -172,6 +172,9 @@ int main(const int argc, const char** argv) {
 				break;
 			case 11:
 				__fuzzer.SaveConfig();
+				break;
+			case 12:
+				__fuzzer.CreateExploit();
 				break;
 		}
 		system("pause");

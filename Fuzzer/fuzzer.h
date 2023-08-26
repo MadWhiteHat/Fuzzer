@@ -66,6 +66,9 @@ public:
 	void
   AppendAutoFuzzer();
 
+	void
+  CreateExploit();
+
 private:
 	uint8_t
   _ChangeByte(size_t __offset, uint8_t __code, bool __verbose = false);
