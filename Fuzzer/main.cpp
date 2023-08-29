@@ -55,16 +55,16 @@ int main(const int argc, const char** argv) {
 	MyProgram::Fuzzer __fuzzer(__exeName, __configName);
 	__fuzzer.SetDividingSigns(__divs);
 
-	while (true) {
-		system("cls");
-		Usage();
+      while (true) {
+        system("cls");
+        Usage();
 
-		std::cout << "Input command: ";
-		std::cin >> __choice;
+        std::cout << "Input command: ";
+        std::cin >> __choice;
 
-		switch (__choice) {
-			case 0: { return 0; }
-			case 1:
+        switch (__choice) {
+          case 0: { return 0; }
+          case 1:
 				__fuzzer.ChangeAutoFuzzer();
 				break;
 			case 2:
