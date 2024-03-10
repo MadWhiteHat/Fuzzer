@@ -11,7 +11,7 @@
 #include "utility.h"
 
 MyProgram::Debugger::
-Debugger(const std::string& __exeName) : _exeName(__exeName) {}
+Debugger(const std::string& __exeName) : _exeName(__exeName), _waitTime(500) {}
 
 DWORD
 MyProgram::Debugger::Run() {
@@ -213,7 +213,7 @@ _DebugEventInfo(DEBUG_EVENT& __debugEvent, PROCESS_INFORMATION& __procInfo) {
 void
 MyProgram::Debugger::
 _Log(const std::string& __msg, bool __verbose) {
-  std::string __log(LOG_FILE_NAME);
+  static std::string __log(LOG_FILE_PATH);
   if (__verbose) { std::cout << __msg << "\n"; }
   MyProgram::Log(__log, __msg);
 }

@@ -7,6 +7,7 @@
 #include <windows.h>
 
 #define BACKUP_DIR ".\\backup"
+#define PROGRAM_DIR ".\\program"
 #define DLL "func.dll"
 
 #include "debugger.h"
@@ -22,8 +23,6 @@ public:
 	);
 	~Fuzzer();
 
-	void
-  SetDividingSigns(const std::vector<uint8_t>& __divs);
 	bool
   FindDividings();
 
@@ -79,19 +78,23 @@ private:
 	uint32_t
   _ChangeDWord(size_t __offset, uint32_t __code, bool __verbose = false);
 
-	void
-  _Log(const std::string& __msg, bool __verbose = false);
-
-	uint8_t
-  _RandomByte();
-
 	size_t
   _FindDividings(size_t __offset);
+
+	static void
+  _Log(const std::string& __msg, bool __verbose = false);
+
+	static uint8_t
+  _RandomByte();
 
 	std::vector<uint8_t> _data;
 	std::string _exeName;
 	std::string _confName;
-	std::vector<uint8_t> _divs;
+
+  // '(', '\"', ',' , ':', '=', ';', '^', ')'
+	static constexpr std::vector<uint8_t> _divs{
+		0x28, 0x93, 0x2C, 0x3A, 0x3D, 0x3B, 0x94, 0x29
+	};
 };
 
 } // namespace MyProgram

@@ -5,7 +5,7 @@
 #include <fstream>
 #include <string>
 
-#define LOG_FILE_NAME "program.log"
+#define LOG_FILE_PATH ".\\logs\\program.log"
 
 namespace MyProgram {
 

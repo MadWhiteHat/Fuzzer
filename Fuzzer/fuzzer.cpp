@@ -31,7 +31,9 @@ MyProgram::Fuzzer::~Fuzzer() = default;
 bool
 MyProgram::Fuzzer::
 LoadConfig() {
-  std::ifstream __cfgFile(_confName, std::ios::binary);
+  std::string __confPath(PROGRAM_DIR);
+  __confPath += _confName;
+  std::ifstream __cfgFile(__confPath, std::ios::binary);
   if (__cfgFile.is_open()) {
 
     __cfgFile.seekg(0, __cfgFile.end);
@@ -60,21 +62,22 @@ void
 MyProgram::Fuzzer::
 Backup() {
   std::string __backupDir(BACKUP_DIR);
+  std::string __programDir(PROGRAM_DIR);
   std::string __dllName("func.dll");
 
   std::filesystem::copy_file(
     __backupDir + "\\" + _exeName,
-    _exeName,
+    __programDir + "\\" + _exeName,
     std::filesystem::copy_options::overwrite_existing
   );
   std::filesystem::copy_file(
     __backupDir + "\\" + _confName,
-    _confName,
+    __programDir + "\\" + _confName,
     std::filesystem::copy_options::overwrite_existing
   );
   std::filesystem::copy_file(
     __backupDir + "\\" + __dllName,
-    __dllName,
+    __programDir + "\\" + __dllName,
     std::filesystem::copy_options::overwrite_existing
   );
 }
@@ -89,10 +92,6 @@ PrintConfig() {
   std::cout.fill(__prev);
   std::cout << '\n';
 }
-
-void
-MyProgram::Fuzzer::
-SetDividingSigns(const std::vector<uint8_t>& __divs) { _divs = __divs; }
 
 bool 
 MyProgram::Fuzzer::
@@ -545,7 +544,7 @@ _ChangeByte(size_t __offset, uint8_t __code, bool __verbose) {
 
 uint16_t 
 MyProgram::Fuzzer::
-_ChangeWord(size_t __offset, WORD __code, bool __verbose) {
+_ChangeWord(size_t __offset, uint16_t __code, bool __verbose) {
   std::stringstream __msg;
   uint16_t __tmp = (_data[__offset + 1] << 8) + _data[__offset];
 
@@ -616,7 +615,7 @@ _RandomByte(){
 void
 MyProgram::Fuzzer::
 _Log(const std::string& __msg, bool __verbose) {
-  std::string __log(LOG_FILE_NAME);
+  static std::string __log(LOG_FILE_PATH);
   if (__verbose) { std::cout << __msg << "\n"; }
   MyProgram::Log(__log, __msg);
 }
