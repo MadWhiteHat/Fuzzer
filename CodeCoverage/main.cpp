@@ -3,195 +3,129 @@
 #include "droption.h"
 #include <string.h>
 
-namespace dynamorio {
-  namespace samples {
-    namespace {
+#define OUTPUT_FILE_DIR "output"
+#define OUTPUT_FILE_PATH OUTPUT_FILE_DIR "\\ins_count.txt"
 
-      using ::dynamorio::droption::droption_parser_t;
-      using ::dynamorio::droption::DROPTION_SCOPE_ALL;
-      using ::dynamorio::droption::DROPTION_SCOPE_CLIENT;
-      using ::dynamorio::droption::droption_t;
+static uint64 ins_count = 0;
 
-#ifdef WINDOWS
-#    define DISPLAY_STRING(msg) dr_messagebox(msg)
-#else
-#    define DISPLAY_STRING(msg) dr_printf("%s\n", msg);
-#endif
+static void
+inscount(uint num_instrs) { ins_count += num_instrs; }
 
-#define NULL_TERMINATE(buf) (buf)[(sizeof((buf)) / sizeof((buf)[0])) - 1] = '\0'
+static void
+exit_event() {
+  dr_enable_console_printing();
 
-      static droption_t<bool> only_from_app(
-        DROPTION_SCOPE_CLIENT, "only_from_app", false,
-        "Only count app, not lib, instructions",
-        "Count only instructions in the application itself, ignoring instructions in "
-        "shared libraries.");
+  dr_printf("Hello world!");
 
-      /* Application module */
-      static app_pc exe_start;
-      /* we only have a global count */
-      static uint64 global_count;
-      /* A simple clean call that will be automatically inlined because it has only
-       * one argument and contains no calls to other functions.
+  bool dir_exists = dr_directory_exists(OUTPUT_FILE_DIR);
+  if (!dir_exists) { dr_create_dir(OUTPUT_FILE_DIR); }
+
+  file_t out = dr_open_file(OUTPUT_FILE_PATH, DR_FILE_WRITE_OVERWRITE);
+  if (out != INVALID_FILE) {
+    dr_write_file(out, &ins_count, sizeof(ins_count));
+    dr_close_file(out);
+  }
+
+  drmgr_exit();
+}
+
+static dr_emit_flags_t
+bb_analysis_event(
+  void* drcontext,
+  void* tag,
+  instrlist_t* bb,
+  bool for_trace,
+  bool translating,
+  void** user_data
+) {
+  instr_t* instr = NULL;
+  uint num_instrs = 0;
+  bool is_emulation = false;
+
+  /* Count instructions. If an emulation client is running with this client,
+   * we want to count all the original native instructions and the emulated
+   * instruction but NOT the introduced native instructions used for emulation.
+   */
+  for (instr = instrlist_first(bb); instr != NULL; instr = instr_get_next(instr)) {
+    if (drmgr_is_emulation_start(instr)) {
+      /* Each emulated instruction is replaced by a series of native
+       * instructions delimited by labels indicating when the emulation
+       * sequence begins and ends. It is the responsibility of the
+       * emulation client to place the start/stop labels correctly.
        */
-      static void
-        inscount(uint num_instrs)
-      {
-        global_count += num_instrs;
-      }
-      static void
-        event_exit(void);
-      static dr_emit_flags_t
-        event_bb_analysis(void* drcontext, void* tag, instrlist_t* bb, bool for_trace,
-          bool translating, void** user_data);
-      static dr_emit_flags_t
-        event_app_instruction(void* drcontext, void* tag, instrlist_t* bb, instr_t* inst,
-          bool for_trace, bool translating, void* user_data);
+      ++num_instrs;
+      is_emulation = true;
+      /* Data about the emulated instruction can be extracted from the
+       * start label using the accessor function:
+       * drmgr_get_emulated_instr_data()
+       */
+      continue;
+    }
+    if (drmgr_is_emulation_end(instr)) {
+      is_emulation = false;
+      continue;
+    }
+    if (is_emulation) { continue; }
+    ++num_instrs;
+  }
+  *user_data = (void*)(ptr_uint_t)num_instrs;
+  return DR_EMIT_DEFAULT;
+}
 
-      static void
-        event_exit(void)
-      {
-#ifdef SHOW_RESULTS
-        char msg[512];
-        int len;
-        len = dr_snprintf(msg, sizeof(msg) / sizeof(msg[0]),
-          "Instrumentation results: %llu instructions executed\n",
-          global_count);
-        DR_ASSERT(len > 0);
-        NULL_TERMINATE(msg);
-        DISPLAY_STRING(msg);
-#endif /* SHOW_RESULTS */
-        drmgr_exit();
-      }
+static dr_emit_flags_t
+instruction_event(
+  void* drcontext,
+  void* tag,
+  instrlist_t* bb,
+  instr_t* instr,
+  bool for_trace,
+  bool translating,
+  void* user_data
+) {
+  uint num_instrs;
+  /* By default drmgr enables auto-predication, which predicates all instructions with
+   * the predicate of the current instruction on ARM.
+   * We disable it here because we want to unconditionally execute the following
+   * instrumentation.
+   */
+  drmgr_disable_auto_predication(drcontext, bb);
 
-      static dr_emit_flags_t
-        event_bb_analysis(void* drcontext, void* tag, instrlist_t* bb, bool for_trace,
-          bool translating, void** user_data)
-      {
-        instr_t* instr;
-        uint num_instrs;
+  if (!drmgr_is_first_instr(drcontext, instr)) { return DR_EMIT_DEFAULT; }
 
-#ifdef VERBOSE
-        dr_printf("in dynamorio_basic_block(tag=" PFX ")\n", tag);
-#    ifdef VERBOSE_VERBOSE
-        instrlist_disassemble(drcontext, tag, bb, STDOUT);
-#    endif
-#endif
-        /* Only count in app BBs */
-        if (only_from_app.get_value()) {
-          module_data_t* mod = dr_lookup_module(dr_fragment_app_pc(tag));
-          if (mod != NULL) {
-            bool from_exe = (mod->start == exe_start);
-            dr_free_module_data(mod);
-            if (!from_exe) {
-              *user_data = NULL;
-              return DR_EMIT_DEFAULT;
-            }
-          }
-        }
+  /* Only insert calls for in-app BBs */
+  if (user_data == NULL) { return DR_EMIT_DEFAULT; }
+    
+  /* Insert clean call */
+  num_instrs = (uint)(ptr_uint_t)user_data;
+  dr_insert_clean_call(
+    drcontext, bb, instrlist_first_app(bb), (void*)inscount, false, 1,
+    OPND_CREATE_INT32(num_instrs)
+  );
 
-        /* Count instructions. If an emulation client is running with this client,
-         * we want to count all the original native instructions and the emulated
-         * instruction but NOT the introduced native instructions used for emulation.
-         */
-        bool is_emulation = false;
-        for (instr = instrlist_first(bb), num_instrs = 0; instr != NULL;
-          instr = instr_get_next(instr)) {
-          if (drmgr_is_emulation_start(instr)) {
-            /* Each emulated instruction is replaced by a series of native
-             * instructions delimited by labels indicating when the emulation
-             * sequence begins and ends. It is the responsibility of the
-             * emulation client to place the start/stop labels correctly.
-             */
-            num_instrs++;
-            is_emulation = true;
-            /* Data about the emulated instruction can be extracted from the
-             * start label using the accessor function:
-             * drmgr_get_emulated_instr_data()
-             */
-            continue;
-          }
-          if (drmgr_is_emulation_end(instr)) {
-            is_emulation = false;
-            continue;
-          }
-          if (is_emulation)
-            continue;
-          if (!instr_is_app(instr))
-            continue;
-          num_instrs++;
-        }
-        *user_data = (void*)(ptr_uint_t)num_instrs;
+  return DR_EMIT_DEFAULT;
+}
 
-#if defined(VERBOSE) && defined(VERBOSE_VERBOSE)
-        dr_printf("Finished counting for dynamorio_basic_block(tag=" PFX ")\n", tag);
-        instrlist_disassemble(drcontext, tag, bb, STDOUT);
-#endif
-        return DR_EMIT_DEFAULT;
-      }
+static bool
+exception_event(void* drcontext, dr_exception_t* excpt) {
 
-      static dr_emit_flags_t
-        event_app_instruction(void* drcontext, void* tag, instrlist_t* bb, instr_t* instr,
-          bool for_trace, bool translating, void* user_data)
-      {
-        uint num_instrs;
-        /* By default drmgr enables auto-predication, which predicates all instructions with
-         * the predicate of the current instruction on ARM.
-         * We disable it here because we want to unconditionally execute the following
-         * instrumentation.
-         */
-        drmgr_disable_auto_predication(drcontext, bb);
-        if (!drmgr_is_first_instr(drcontext, instr))
-          return DR_EMIT_DEFAULT;
-        /* Only insert calls for in-app BBs */
-        if (user_data == NULL)
-          return DR_EMIT_DEFAULT;
-        /* Insert clean call */
-        num_instrs = (uint)(ptr_uint_t)user_data;
-        dr_insert_clean_call(drcontext, bb, instrlist_first_app(bb), (void*)inscount,
-          false /* save fpstate */, 1, OPND_CREATE_INT32(num_instrs));
-        return DR_EMIT_DEFAULT;
-      }
+  if (excpt->record->ExceptionCode != EXCEPTION_BREAKPOINT) {
+    drmgr_exit();
+    dr_exit_process(EXIT_FAILURE);
+  }
 
-    } // namespace
-  } // namespace samples
-} // namespace dynamorio
+  return true;
+}
 
 DR_EXPORT void
-dr_client_main(client_id_t id, int argc, const char* argv[])
-{
-  dr_set_client_name("DynamoRIO Sample Client 'inscount'",
-    "http://dynamorio.org/issues");
-
-  /* Options */
-  if (!dynamorio::droption::droption_parser_t::parse_argv(
-    dynamorio::droption::DROPTION_SCOPE_CLIENT, argc, argv, NULL, NULL))
-    DR_ASSERT(false);
+dr_client_main(client_id_t id, int argc, const char* argv[]) {
+  dr_set_client_name("My instructions counter", NULL);
+    
   drmgr_init();
 
-  /* Get main module address */
-  if (dynamorio::samples::only_from_app.get_value()) {
-    module_data_t* exe = dr_get_main_module();
-    if (exe != NULL)
-      dynamorio::samples::exe_start = exe->start;
-    dr_free_module_data(exe);
-  }
-
   /* register events */
-  dr_register_exit_event(dynamorio::samples::event_exit);
-  drmgr_register_bb_instrumentation_event(dynamorio::samples::event_bb_analysis,
-    dynamorio::samples::event_app_instruction,
-    NULL);
-
-  /* make it easy to tell, by looking at log file, which client executed */
-  dr_log(NULL, DR_LOG_ALL, 1, "Client 'inscount' initializing\n");
-#ifdef SHOW_RESULTS
-  /* also give notification to stderr */
-  if (dr_is_notify_on()) {
-#    ifdef WINDOWS
-    /* ask for best-effort printing to cmd window.  must be called at init. */
-    dr_enable_console_printing();
-#    endif
-    dr_fprintf(STDERR, "Client inscount is running\n");
-  }
-#endif
+  dr_register_exit_event(exit_event);
+  drmgr_register_bb_instrumentation_event(
+    bb_analysis_event, instruction_event, NULL
+  );
+  drmgr_register_exception_event(exception_event);
 }
