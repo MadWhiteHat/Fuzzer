@@ -32,7 +32,7 @@ bool
 MyProgram::Fuzzer::
 LoadConfig() {
   std::string __confPath(PROGRAM_DIR);
-  __confPath += _confName;
+  __confPath += '\\' + _confName;
   std::ifstream __cfgFile(__confPath, std::ios::binary);
   if (__cfgFile.is_open()) {
 
@@ -66,18 +66,18 @@ Backup() {
   std::string __dllName("func.dll");
 
   std::filesystem::copy_file(
-    __backupDir + "\\" + _exeName,
-    __programDir + "\\" + _exeName,
+    __backupDir + '\\' + _exeName,
+    __programDir + '\\' + _exeName,
     std::filesystem::copy_options::overwrite_existing
   );
   std::filesystem::copy_file(
-    __backupDir + "\\" + _confName,
-    __programDir + "\\" + _confName,
+    __backupDir + '\\' + _confName,
+    __programDir + '\\' + _confName,
     std::filesystem::copy_options::overwrite_existing
   );
   std::filesystem::copy_file(
-    __backupDir + "\\" + __dllName,
-    __programDir + "\\" + __dllName,
+    __backupDir + '\\' + __dllName,
+    __programDir + '\\' + __dllName,
     std::filesystem::copy_options::overwrite_existing
   );
 }
@@ -393,8 +393,10 @@ SaveConfig() {
 DWORD
 MyProgram::Fuzzer::
 DryRun() {
+  std::string __exePath(PROGRAM_DIR);
+  __exePath += '\\' + _exeName;
   SaveConfig();
-  MyProgram::Debugger __debugger(_exeName);
+  MyProgram::Debugger __debugger(__exePath);
   return __debugger.Run();
 }
 
