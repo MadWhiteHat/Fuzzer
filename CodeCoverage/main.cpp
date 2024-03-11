@@ -1,71 +1,197 @@
-#include <iostream>
-#include <fstream>
+#include "dr_api.h"
+#include "drmgr.h"
+#include "droption.h"
+#include <string.h>
 
-#include "pin.H"
+namespace dynamorio {
+  namespace samples {
+    namespace {
 
+      using ::dynamorio::droption::droption_parser_t;
+      using ::dynamorio::droption::DROPTION_SCOPE_ALL;
+      using ::dynamorio::droption::DROPTION_SCOPE_CLIENT;
+      using ::dynamorio::droption::droption_t;
 
-PIN_MUTEX mutex;
-std::ofstream out;
-static INT32 instCount = 0;
+#ifdef WINDOWS
+#    define DISPLAY_STRING(msg) dr_messagebox(msg)
+#else
+#    define DISPLAY_STRING(msg) dr_printf("%s\n", msg);
+#endif
 
-// This function is called before every instruction is executed
-static VOID AddInst() {
+#define NULL_TERMINATE(buf) (buf)[(sizeof((buf)) / sizeof((buf)[0])) - 1] = '\0'
 
-  PIN_MutexLock(&mutex);
-  
-  ++instCount;
-  out << instCount << '\n';
+      static droption_t<bool> only_from_app(
+        DROPTION_SCOPE_CLIENT, "only_from_app", false,
+        "Only count app, not lib, instructions",
+        "Count only instructions in the application itself, ignoring instructions in "
+        "shared libraries.");
 
-  PIN_MutexUnlock(&mutex);
-}
+      /* Application module */
+      static app_pc exe_start;
+      /* we only have a global count */
+      static uint64 global_count;
+      /* A simple clean call that will be automatically inlined because it has only
+       * one argument and contains no calls to other functions.
+       */
+      static void
+        inscount(uint num_instrs)
+      {
+        global_count += num_instrs;
+      }
+      static void
+        event_exit(void);
+      static dr_emit_flags_t
+        event_bb_analysis(void* drcontext, void* tag, instrlist_t* bb, bool for_trace,
+          bool translating, void** user_data);
+      static dr_emit_flags_t
+        event_app_instruction(void* drcontext, void* tag, instrlist_t* bb, instr_t* inst,
+          bool for_trace, bool translating, void* user_data);
 
-// Pin calls this function every time a new instruction is encountered
-static VOID Instruction(INS ins, VOID* v)
+      static void
+        event_exit(void)
+      {
+#ifdef SHOW_RESULTS
+        char msg[512];
+        int len;
+        len = dr_snprintf(msg, sizeof(msg) / sizeof(msg[0]),
+          "Instrumentation results: %llu instructions executed\n",
+          global_count);
+        DR_ASSERT(len > 0);
+        NULL_TERMINATE(msg);
+        DISPLAY_STRING(msg);
+#endif /* SHOW_RESULTS */
+        drmgr_exit();
+      }
+
+      static dr_emit_flags_t
+        event_bb_analysis(void* drcontext, void* tag, instrlist_t* bb, bool for_trace,
+          bool translating, void** user_data)
+      {
+        instr_t* instr;
+        uint num_instrs;
+
+#ifdef VERBOSE
+        dr_printf("in dynamorio_basic_block(tag=" PFX ")\n", tag);
+#    ifdef VERBOSE_VERBOSE
+        instrlist_disassemble(drcontext, tag, bb, STDOUT);
+#    endif
+#endif
+        /* Only count in app BBs */
+        if (only_from_app.get_value()) {
+          module_data_t* mod = dr_lookup_module(dr_fragment_app_pc(tag));
+          if (mod != NULL) {
+            bool from_exe = (mod->start == exe_start);
+            dr_free_module_data(mod);
+            if (!from_exe) {
+              *user_data = NULL;
+              return DR_EMIT_DEFAULT;
+            }
+          }
+        }
+
+        /* Count instructions. If an emulation client is running with this client,
+         * we want to count all the original native instructions and the emulated
+         * instruction but NOT the introduced native instructions used for emulation.
+         */
+        bool is_emulation = false;
+        for (instr = instrlist_first(bb), num_instrs = 0; instr != NULL;
+          instr = instr_get_next(instr)) {
+          if (drmgr_is_emulation_start(instr)) {
+            /* Each emulated instruction is replaced by a series of native
+             * instructions delimited by labels indicating when the emulation
+             * sequence begins and ends. It is the responsibility of the
+             * emulation client to place the start/stop labels correctly.
+             */
+            num_instrs++;
+            is_emulation = true;
+            /* Data about the emulated instruction can be extracted from the
+             * start label using the accessor function:
+             * drmgr_get_emulated_instr_data()
+             */
+            continue;
+          }
+          if (drmgr_is_emulation_end(instr)) {
+            is_emulation = false;
+            continue;
+          }
+          if (is_emulation)
+            continue;
+          if (!instr_is_app(instr))
+            continue;
+          num_instrs++;
+        }
+        *user_data = (void*)(ptr_uint_t)num_instrs;
+
+#if defined(VERBOSE) && defined(VERBOSE_VERBOSE)
+        dr_printf("Finished counting for dynamorio_basic_block(tag=" PFX ")\n", tag);
+        instrlist_disassemble(drcontext, tag, bb, STDOUT);
+#endif
+        return DR_EMIT_DEFAULT;
+      }
+
+      static dr_emit_flags_t
+        event_app_instruction(void* drcontext, void* tag, instrlist_t* bb, instr_t* instr,
+          bool for_trace, bool translating, void* user_data)
+      {
+        uint num_instrs;
+        /* By default drmgr enables auto-predication, which predicates all instructions with
+         * the predicate of the current instruction on ARM.
+         * We disable it here because we want to unconditionally execute the following
+         * instrumentation.
+         */
+        drmgr_disable_auto_predication(drcontext, bb);
+        if (!drmgr_is_first_instr(drcontext, instr))
+          return DR_EMIT_DEFAULT;
+        /* Only insert calls for in-app BBs */
+        if (user_data == NULL)
+          return DR_EMIT_DEFAULT;
+        /* Insert clean call */
+        num_instrs = (uint)(ptr_uint_t)user_data;
+        dr_insert_clean_call(drcontext, bb, instrlist_first_app(bb), (void*)inscount,
+          false /* save fpstate */, 1, OPND_CREATE_INT32(num_instrs));
+        return DR_EMIT_DEFAULT;
+      }
+
+    } // namespace
+  } // namespace samples
+} // namespace dynamorio
+
+DR_EXPORT void
+dr_client_main(client_id_t id, int argc, const char* argv[])
 {
-  // Insert a call to docount before every instruction, no arguments are passed
-  INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR)AddInst, IARG_END);
-}
+  dr_set_client_name("DynamoRIO Sample Client 'inscount'",
+    "http://dynamorio.org/issues");
 
-// This function is called when the application exits
-static VOID Fini(INT32 code, VOID* v) {
-  PIN_MutexLock(&mutex);
-  out.close();
-  PIN_MutexUnlock(&mutex);
+  /* Options */
+  if (!dynamorio::droption::droption_parser_t::parse_argv(
+    dynamorio::droption::DROPTION_SCOPE_CLIENT, argc, argv, NULL, NULL))
+    DR_ASSERT(false);
+  drmgr_init();
 
-  PIN_MutexFini(&mutex);
-}
+  /* Get main module address */
+  if (dynamorio::samples::only_from_app.get_value()) {
+    module_data_t* exe = dr_get_main_module();
+    if (exe != NULL)
+      dynamorio::samples::exe_start = exe->start;
+    dr_free_module_data(exe);
+  }
 
-/* ===================================================================== */
-/* Print Help Message                                                    */
-/* ===================================================================== */
+  /* register events */
+  dr_register_exit_event(dynamorio::samples::event_exit);
+  drmgr_register_bb_instrumentation_event(dynamorio::samples::event_bb_analysis,
+    dynamorio::samples::event_app_instruction,
+    NULL);
 
-static INT32 Usage() {
-  std::cerr << "This tool counts the number of dynamic instructions executed" << std::endl;
-  return EXIT_FAILURE;
-}
-
-/* ===================================================================== */
-/* Main                                                                  */
-/* ===================================================================== */
-/*   argc, argv are the entire command line: pin -t <toolname> -- ...    */
-/* ===================================================================== */
-
-
-INT32 main(int argc, char** argv)
-{
-  std::cout << "[CodeCoverage] Start..." << std::endl;
-  if (PIN_Init(argc, argv)) { return Usage(); }
-
-  out.open("out.txt");
-  if (!out.is_open()) { return EXIT_FAILURE; }
-
-  if (!PIN_MutexInit(&mutex)) { return EXIT_FAILURE; }
-
-  INS_AddInstrumentFunction(Instruction, 0);
-  PIN_AddFiniFunction(Fini, 0);
-
-  std::cout << "[CodeCoverage] Program trace Start" << std::endl;
-
-  PIN_StartProgram();
-  std::exit(instCount);
+  /* make it easy to tell, by looking at log file, which client executed */
+  dr_log(NULL, DR_LOG_ALL, 1, "Client 'inscount' initializing\n");
+#ifdef SHOW_RESULTS
+  /* also give notification to stderr */
+  if (dr_is_notify_on()) {
+#    ifdef WINDOWS
+    /* ask for best-effort printing to cmd window.  must be called at init. */
+    dr_enable_console_printing();
+#    endif
+    dr_fprintf(STDERR, "Client inscount is running\n");
+  }
+#endif
 }
