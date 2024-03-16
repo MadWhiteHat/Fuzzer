@@ -73,13 +73,14 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>TARGET_IA32;HOST_IA32;TARGET_WINDOWS;PIN_CRT=1;__i386__;_LIBCPP_DISABLE_AVAILABILITY;_LIBCPP_NO_VCRUNTIME;__BIONIC__</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard>stdcpp20</LanguageStandard>
       <AdditionalIncludeDirectories>$(PROGRAMFILES)\pin-3.30-98830\source\include\pin;$(PROGRAMFILES)\pin-3.30-98830\source\include\pin\gen;$(PROGRAMFILES)\pin-3.30-98830\extras\xed-ia32\include\xed;$(PROGRAMFILES)\pin-3.30-98830\extras\components\include;$(PROGRAMFILES)\pin-3.30-98830\extras\cxx\include;$(PROGRAMFILES)\pin-3.30-98830\extras\crt;$(PROGRAMFILES)\pin-3.30-98830\extras\crt\include;$(PROGRAMFILES)\pin-3.30-98830\extras\crt\include\arch-x86;$(PROGRAMFILES)\pin-3.30-98830\extras\crt\include\kernel\uapi;$(PROGRAMFILES)\pin-3.30-98830\extras\crt\include\kernel\uapi\asm-x86;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <RuntimeTypeInfo>false</RuntimeTypeInfo>
       <AdditionalOptions>/GR- /GS- /EHs- /EHa- /FP:strict /Oi- /FIinclude/msvc_compat.h %(AdditionalOptions)</AdditionalOptions>
       <ExceptionHandling />
       <DebugInformationFormat />
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>NotSet</SubSystem>
