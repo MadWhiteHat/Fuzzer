@@ -488,6 +488,6 @@ FodyWeavers.xsd
 
 # Project dependent
 *.log
-vuln*
-config*
-func.dll
+program
+crash
+backup

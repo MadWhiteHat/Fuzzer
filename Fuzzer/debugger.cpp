@@ -4,210 +4,175 @@
 #include <iomanip>
 #include <vector>
 #include <windows.h>
+#include <aclapi.h>
 #include <processthreadsapi.h>
-#include <dbghelp.h>
 
 #include "debugger.h"
 #include "utility.h"
 
 MyProgram::Debugger::
-Debugger(const std::string& __exeName) : _exeName(__exeName), _waitTime(500) {}
+Debugger(const std::string& __exeName, const std::string& __options)
+  : _exeName(__exeName),
+    _options(__options) {
 
-DWORD
-MyProgram::Debugger::Run() {
+  ZeroMemory(&_startInfo, sizeof(_startInfo));
+  _startInfo.cb = sizeof(_startInfo);
+  ZeroMemory(&_procInfo, sizeof(_procInfo));
+}
+
+BOOL
+MyProgram::Debugger::
+DryRun() {
   BOOL __bRes = FALSE;
-  DWORD __exitCode = 0;
-  STARTUPINFOA __startInfo;
-  PROCESS_INFORMATION __procInfo;
+
+  __bRes = _CreateTargetProcess();
+  if (!__bRes) { return __bRes; }
+
+  _CloseTargetProcess();
+
+  return __bRes;
+}
+
+std::vector<uint64_t>
+MyProgram::Debugger::
+GetTrace() {
+  std::vector<uint64_t> __res;
+  size_t __size;
+  uint64_t __val;
+  std::string __tracePath(PROGRAM_DIR);
+  __tracePath += "\\trace.txt";
+
+  std::ifstream __traceFile(__tracePath);
+  if (!__traceFile.is_open()) { return __res; }
+
+  __traceFile >> std::hex >> __size;
+  __res.reserve(__size + 1);
+
+  while (!__traceFile.eof()) {
+    __traceFile >> std::hex >> __val;
+    __res.push_back(__val);
+  }
+
+  if (__res.size() != __size + 1) { __res.clear(); }
+
+  return __res;
+}
+
+BOOL
+MyProgram::Debugger::
+_ChangeCurrentDirectory(
+  LPCSTR __newDir, LPSTR __prevDir, size_t __prevDirSize
+) {
+  BOOL __bRes = FALSE;
+  DWORD __dwRes = ERROR_SUCCESS;
+  CHAR __currDir[MAX_PATH] = { 0x00 };
   std::stringstream __msg;
+
   __msg.fill('0');
-  ZeroMemory(&__startInfo, sizeof(__startInfo));
-  __startInfo.cb = sizeof(__startInfo);
-  ZeroMemory(&__procInfo, sizeof(__procInfo));
+
+  // Store current directory
+  if (__prevDir != NULL) {
+    __bRes = GetCurrentDirectoryA(MAX_PATH, __currDir);
+    if (!__bRes) {
+      __dwRes = GetLastError();
+      __msg << "GetCurrentDirectory failed. Error: 0x" << std::hex
+        << std::setw(8) << __dwRes;
+      _Log(__msg.str(), true);
+      return __bRes;
+    }
+
+    snprintf(__prevDir, __prevDirSize, "%s", __currDir);
+  }
+
+  __bRes = SetCurrentDirectoryA(__newDir);
+  if (!__bRes) {
+    __dwRes = GetLastError();
+    __msg << "SetCurrentDirectory failed. Error: 0x" << std::hex
+      << std::setw(8) << __dwRes;
+    _Log(__msg.str(), true);
+    return __bRes;
+  }
+
+  return TRUE;
+}
+
+BOOL
+MyProgram::Debugger::
+_CreateTargetProcess() {
+  BOOL __bRes = FALSE;
+  DWORD __dwRes = ERROR_SUCCESS;
+  CHAR __programDir[MAX_PATH] = { 0x00 };
+  CHAR __currDir[MAX_PATH] = { 0x00 };
+  std::string __commandLine;
+  std::stringstream __msg;
+  CHAR* __cmd;
+  size_t __cmdSize;
+
+  __msg.fill('0');
+  __dwRes, __programDir;
+
+  __commandLine = _exeName;
+  if (!_options.empty()) {
+    __commandLine += ' ' + _options;
+  }
+
+  __cmdSize = __commandLine.length() + 1;
+  __cmd = new(std::nothrow) char[__cmdSize];
+  if (__cmd == NULL) {
+    __msg << "Memory allocation failed. Error: 0x" << std::hex
+      << std::setw(8) << 0;
+    _Log(__msg.str(), true);
+    return __bRes;
+  }
+
+  std::snprintf(__cmd, __cmdSize, "%s", __commandLine.c_str());
+
+  __bRes = GetFullPathNameA(PROGRAM_DIR, MAX_PATH, __programDir, NULL);
+  if (!__bRes) {
+    __dwRes = GetLastError();
+    __msg << "GetFullPathName failed. Error: 0x" << std::hex
+      << std::setw(8) << __dwRes;
+    _Log(__msg.str(), true);
+    return __bRes;
+  }
+
+  __bRes = _ChangeCurrentDirectory(__programDir, __currDir, MAX_PATH);
+  if (!__bRes) { return __bRes; }
+
+  ZeroMemory(&_startInfo, sizeof(_startInfo));
+  _startInfo.cb = sizeof(_startInfo);
+  ZeroMemory(&_procInfo, sizeof(_procInfo));
+
   __bRes = CreateProcessA(
-    _exeName.c_str(),
     NULL,
+    __cmd,
     NULL,
     NULL,
     FALSE,
-    DEBUG_ONLY_THIS_PROCESS,
+    0,
     NULL,
     NULL,
-    &__startInfo,
-    &__procInfo
+    &_startInfo,
+    &_procInfo
   );
   if (!__bRes) {
-    __msg << "Debugger cannot CreateProcess to debug. Error: 0x" << std::hex 
-      << std::setw(8) << GetLastError();
+    __dwRes = GetLastError();
+    __msg << "CreateProcess failed. Error: 0x" << std::hex
+      << std::setw(8) << __dwRes;
     _Log(__msg.str(), true);
   }
 
-  DEBUG_EVENT __debugEvent = { 0 };
-  while (true) {
-    if (!WaitForDebugEvent(&__debugEvent, _waitTime)) {
-      GetExitCodeProcess(__procInfo.hProcess, &__exitCode);
-      if (__exitCode != STILL_ACTIVE) {
-        __msg << "Test no Exception. ExitCode: 0x" << std::hex << std::setw(8)
-          << __exitCode;
-        _Log(__msg.str(), true);
-        return __exitCode;
-      } else { continue; }
-    }
-    if (__debugEvent.dwDebugEventCode == EXCEPTION_DEBUG_EVENT) {
-      __exitCode = _DebugEventInfo(__debugEvent, __procInfo);
-      if (__exitCode != EXCEPTION_BREAKPOINT) { break; }
-    }
-    ContinueDebugEvent(
-      __debugEvent.dwProcessId,
-      __debugEvent.dwThreadId,
-      DBG_CONTINUE
-    );
-  }
-  TerminateProcess(__procInfo.hProcess, GetLastError());  
-  return __exitCode;
+  _ChangeCurrentDirectory(__currDir, NULL, 0);
+
+  return __bRes;
 }
 
-DWORD
+void
 MyProgram::Debugger::
-_DebugEventInfo(DEBUG_EVENT& __debugEvent, PROCESS_INFORMATION& __procInfo) {
-  CONTEXT __context;
-  std::stringstream __msg;
-  std::string __exTextCode;
-  uint8_t* __stackDump;
-  __msg.fill('0');
-  __context.ContextFlags = CONTEXT_ALL;
-  if (GetThreadContext(__procInfo.hThread, &__context)) {
-    DWORD __exCode = __debugEvent.u.Exception.ExceptionRecord.ExceptionCode;
-    switch (__exCode) {
-      case EXCEPTION_ACCESS_VIOLATION:
-        __exTextCode = "EXCEPTION_ACCESS_VIOLATION";
-        break;
-      case EXCEPTION_ARRAY_BOUNDS_EXCEEDED:
-        __exTextCode = "EXCEPTION_ARRAY_BOUNDS_EXCEEDED";
-        break;
-      case EXCEPTION_DATATYPE_MISALIGNMENT:
-        __exTextCode = "EXCEPTION_DATATYPE_MISALIGNMENT";
-        break;
-      case EXCEPTION_FLT_DENORMAL_OPERAND:
-        __exTextCode = "EXCEPTION_FLT_DENORMAL_OPERAND";
-        break;
-      case EXCEPTION_FLT_DIVIDE_BY_ZERO:
-        __exTextCode = "EXCEPTION_FLT_DIVIDE_BY_ZERO";
-        break;
-      case EXCEPTION_FLT_INEXACT_RESULT:
-        __exTextCode = "EXCEPTION_FLT_INEXACT_RESULT";
-        break;
-      case EXCEPTION_FLT_INVALID_OPERATION:
-        __exTextCode = "EXCEPTION_FLT_INVALID_OPERATION";
-        break;
-      case EXCEPTION_FLT_OVERFLOW:
-        __exTextCode = "EXCEPTION_FLT_OVERFLOW";
-        break;
-      case EXCEPTION_FLT_STACK_CHECK:
-        __exTextCode = "EXCEPTION_FLT_STACK_CHECK";
-        break;
-      case EXCEPTION_FLT_UNDERFLOW:
-        __exTextCode = "EXCEPTION_FLT_UNDERFLOW";
-        break;
-      case EXCEPTION_ILLEGAL_INSTRUCTION:
-        __exTextCode = "EXCEPTION_ILLEGAL_INSTRUCTION";
-        break;
-      case EXCEPTION_IN_PAGE_ERROR:
-        __exTextCode = "EXCEPTION_IN_PAGE_ERROR";
-        break;
-      case EXCEPTION_INT_DIVIDE_BY_ZERO:
-        __exTextCode = "EXCEPTION_INT_DIVIDE_BY_ZERO";
-        break;
-      case EXCEPTION_INT_OVERFLOW:
-        __exTextCode = "EXCEPTION_INT_OVERFLOW";
-        break;
-      case EXCEPTION_INVALID_DISPOSITION:
-        __exTextCode = "EXCEPTION_INVALID_DISPOSITION";
-        break;
-      case EXCEPTION_NONCONTINUABLE_EXCEPTION:
-        __exTextCode = "EXCEPTION_NONCONTINUABLE_EXCEPTION";
-        break;
-      case EXCEPTION_PRIV_INSTRUCTION:
-        __exTextCode = "EXCEPTION_PRIV_INSTRUCTION";
-        break;
-      case EXCEPTION_SINGLE_STEP:
-        __exTextCode = "EXCEPTION_SINGLE_STEP";
-        break;
-      case EXCEPTION_STACK_OVERFLOW:
-        __exTextCode = "EXCEPTION_STACK_OVERFLOW";
-        break;
-    }
-    if (__exCode != EXCEPTION_BREAKPOINT) {
-      if (__debugEvent.u.Exception.dwFirstChance == 1) {
-        __msg << "First chance exception at 0x" << std::setw(8) << std::hex
-          << __debugEvent.u.Exception.ExceptionRecord.ExceptionAddress
-          << " " << __exTextCode << " code: 0x" << std::setw(8)
-          << __debugEvent.u.Exception.ExceptionRecord.ExceptionCode << "\n"
-          << "EAX = 0x" << std::setw(8) << __context.Eax << ' '
-          << "EBX = 0x" << std::setw(8) << __context.Ebx << '\n'
-          << "ECX = 0x" << std::setw(8) << __context.Ecx << ' '
-          << "EDX = 0x" << std::setw(8) << __context.Edx << '\n'
-          << "ESI = 0x" << std::setw(8) << __context.Esi << ' '
-          << "EDI = 0x" << std::setw(8) << __context.Edi << '\n'
-          << "EIP = 0x" << std::setw(8) << __context.Eip << ' '
-          << "ESP = 0x" << std::setw(8) << __context.Esp << '\n'
-          << "EBP = 0x" << std::setw(8) << __context.Ebp << ' '
-          << "EFL = 0x" << std::setw(8) << __context.EFlags << '\n'
-          << "CS = 0x" << std::setw(4) << __context.SegCs << ' '
-          << "DS = 0x" << std::setw(4) << __context.SegDs << '\n'
-          << "ES = 0x" << std::setw(4) << __context.SegEs << ' '
-          << "FS = 0x" << std::setw(4) << __context.SegFs << '\n'
-          << "GS = 0x" << std::setw(4) << __context.SegGs << '\n'
-          << "ContextFlags = 0x" << std::setw(8) << __context.ContextFlags
-          << "\n";
-        DWORD __length = __context.Ebp - __context.Esp;
-        if (__length > 0) {
-          __stackDump = new(std::nothrow) uint8_t[__length];
-          if (__stackDump != nullptr) {
-            std::memset(__stackDump, 0x00, __length);
-            void* __baseAddr = reinterpret_cast<void*>(__context.Esp);
-            DWORD __totalRead = 0;
-            ReadProcessMemory(__procInfo.hProcess, __baseAddr, __stackDump,
-              __length, &__totalRead);
-            __msg << "Stack frame:";
-            if (__length > 0x40) { __length = 0x40; }
-            for (DWORD i = 0; i < __length; ++i) {
-              __msg << " 0x" << std::setw(2) << uint32_t(__stackDump[i]);
-            }
-            __msg << "\n";
-          }
-        }
-        STACKFRAME64 __stackFrame;
-        std::memset(&__stackFrame, 0x00, sizeof(__stackFrame));
-        __stackFrame.AddrPC.Offset = __context.Eip;
-        __stackFrame.AddrPC.Mode = AddrModeFlat;
-        __stackFrame.AddrStack.Offset = __context.Esp;
-        __stackFrame.AddrStack.Mode = AddrModeFlat;
-        __stackFrame.AddrFrame.Offset = __context.Ebp;
-        __stackFrame.AddrFrame.Mode = AddrModeFlat;
-        int32_t __depth = 0;
-        __msg << "Call stack:\n";
-        while (StackWalk64(
-            IMAGE_FILE_MACHINE_I386,
-          __procInfo.hProcess,
-          __procInfo.hThread,
-          &__stackFrame,
-          &__context,
-          NULL, NULL, NULL, NULL
-        )) {
-          if (__stackFrame.AddrFrame.Offset == 0) { break; }
-          __msg << "#" << std::dec << ++__depth << ' ' <<  std::hex
-            << std::setw(16) << __stackFrame.AddrPC.Offset << '\n';
-        }
-        _Log(__msg.str() , true);
-      }
-    }
-    return __exCode;
-  } else {
-    __msg << "Debugger cannot get thread context. Error: " << GetLastError();
-    _Log(__msg.str(), true);
-    return 0;
-  }
+_CloseTargetProcess() {
+  WaitForSingleObject(_procInfo.hProcess, INFINITE);
+  CloseHandle(_procInfo.hThread);
+  CloseHandle(_procInfo.hProcess);
 }
 
 void

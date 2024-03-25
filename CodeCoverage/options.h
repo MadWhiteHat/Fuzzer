@@ -13,6 +13,7 @@ struct options_t {
   std::unordered_set<std::string> target_modules;
   std::string fuzz_module;
   std::string fuzz_method;
+  std::string log_dir;
   unsigned long fuzz_offset;
   drwrap_callconv_t callconv;
 };

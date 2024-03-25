@@ -5,7 +5,11 @@
 #include <fstream>
 #include <string>
 
-#define LOG_FILE_PATH ".\\logs\\program.log"
+#define BACKUP_DIR ".\\backup"
+#define PROGRAM_DIR ".\\program"
+#define LOG_DIR ".\\log"
+#define DLL_NAME "func.dll"
+#define LOG_FILE_PATH LOG_DIR "\\program.log"
 
 namespace MyProgram {
 

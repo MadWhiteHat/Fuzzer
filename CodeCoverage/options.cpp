@@ -13,6 +13,7 @@ void parse_options(int argc, const char** argv) {
   options.fuzz_module.reserve(MAX_PATH);
   options.fuzz_method.clear();
   options.fuzz_method.reserve(MAX_PATH);
+  options.log_dir = "coverage.log";
   options.fuzz_offset = 0;
   options.callconv = DRWRAP_CALLCONV_DEFAULT;
 
@@ -36,7 +37,7 @@ void parse_options(int argc, const char** argv) {
     } else if (token == "-call_convention") {
       USAGE_CHECK((i + 1) < argc, "missing calling convention");
       token.assign(argv[++i]);
-      if (token == "stdcall") { 
+      if (token == "stdcall") {
         options.callconv = DRWRAP_CALLCONV_CDECL;
       } else if (token == "fastcall") {
         options.callconv = DRWRAP_CALLCONV_FASTCALL;
@@ -45,6 +46,9 @@ void parse_options(int argc, const char** argv) {
       } else if (token == "ms64") {
         options.callconv = DRWRAP_CALLCONV_MICROSOFT_X64;
       }
+    } else if (token == "-log_dir") {
+      USAGE_CHECK((i + 1) < argc, "missing log file directrory");
+      options.log_dir.assign(argv[++i]);
     } else {
       USAGE_CHECK(false, (std::string("Invalid option: ") + token).c_str());
     }

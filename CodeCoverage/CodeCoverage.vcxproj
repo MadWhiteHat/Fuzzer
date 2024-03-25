@@ -50,7 +50,7 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>true</EnableUAC>
       <AdditionalLibraryDirectories>$(PROGRAMFILES)\DynamoRIO\lib32\release;$(PROGRAMFILES)\DynamoRIO\ext\lib32\release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>dynamorio.lib;drmgr.lib;drwrap.lib;drsyms.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>dynamorio.lib;drmgr.lib;drwrap.lib;drsyms.lib;dbghelp.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
