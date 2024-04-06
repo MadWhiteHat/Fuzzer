@@ -61,7 +61,7 @@ int main(const int argc, const char** argv) {
       switch (__choice) {
         case 0: { return 0; }
         case 1:
-          __fuzzer.AutoFuzzer(2);
+          __fuzzer.AutoFuzzer(3);
           break;
         case 2: {
           size_t __inner_choice;

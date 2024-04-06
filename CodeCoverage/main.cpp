@@ -226,6 +226,8 @@ exception_event(void* drcontext, dr_exception_t* excpt) {
   
   __msg.fill('0');
 
+  dr_printf("sfdfasd");
+
   if (excpt->record->ExceptionCode != EXCEPTION_BREAKPOINT) {
     exit_code = excpt->record->ExceptionCode;
     __hProcess = GetCurrentProcess();
@@ -255,7 +257,7 @@ exception_event(void* drcontext, dr_exception_t* excpt) {
         << "ContextFlags = 0x" << std::setw(8) << __context.ContextFlags
         << "\n";
 
-      __length = __context.Ebp - __context.Esp;
+      __length = 0x80;
       if (__length > 0) {
         __stackDump = new(std::nothrow) uint8_t[__length];
         if (__stackDump != nullptr) {
@@ -266,34 +268,11 @@ exception_event(void* drcontext, dr_exception_t* excpt) {
             __hProcess, __baseAddr, __stackDump, __length, &__totalRead
           );
           __msg << "Stack frame:";
-          if (__length > 0x40) { __length = 0x40; }
           for (DWORD i = 0; i < __length; ++i) {
             __msg << " 0x" << std::setw(2) << uint32_t(__stackDump[i]);
           }
           __msg << "\n";
         }
-      }
-      STACKFRAME64 __stackFrame;
-      std::memset(&__stackFrame, 0x00, sizeof(__stackFrame));
-      __stackFrame.AddrPC.Offset = __context.Eip;
-      __stackFrame.AddrPC.Mode = AddrModeFlat;
-      __stackFrame.AddrStack.Offset = __context.Esp;
-      __stackFrame.AddrStack.Mode = AddrModeFlat;
-      __stackFrame.AddrFrame.Offset = __context.Ebp;
-      __stackFrame.AddrFrame.Mode = AddrModeFlat;
-      int32_t __depth = 0;
-      __msg << "Call stack:\n";
-      while (StackWalk64(
-        IMAGE_FILE_MACHINE_I386,
-        __hProcess,
-        __hThread,
-        &__stackFrame,
-        &__context,
-        NULL, NULL, NULL, NULL
-      )) {
-        if (__stackFrame.AddrFrame.Offset == 0) { break; }
-        __msg << "#" << std::dec << ++__depth << ' ' << std::hex
-          << std::setw(16) << __stackFrame.AddrPC.Offset << '\n';
       }
       dr_printf("%s\n", __msg.str().data());
     }

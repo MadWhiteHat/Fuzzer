@@ -69,7 +69,8 @@ AutoFuzzer(uint32_t __limitShift) {
         __exitCode = TraceRun();
         if (__exitCode) {
           _SaveCrashConfig(__pos, __lowToMid, __exitCode);
-        } else { ++__cnt; }
+          ++__cnt;
+        }
         _ChangeByte(__pos, __tmp, false);
         ++__lowToMid;
 
@@ -79,7 +80,8 @@ AutoFuzzer(uint32_t __limitShift) {
         __exitCode = TraceRun();
         if (__exitCode) {
           _SaveCrashConfig(__pos, __midToLow, __exitCode);
-        } else { ++__cnt; }
+          ++__cnt;
+        }
         _ChangeByte(__pos, __tmp, false);
         --__midToLow;
 
@@ -89,7 +91,8 @@ AutoFuzzer(uint32_t __limitShift) {
         __exitCode = TraceRun();
         if (__exitCode) {
           _SaveCrashConfig(__pos, __midToHigh, __exitCode);
-        } else { ++__cnt; }
+          ++__cnt;
+        }
         _ChangeByte(__pos, __tmp, false);
         ++__midToHigh;
 
@@ -99,7 +102,8 @@ AutoFuzzer(uint32_t __limitShift) {
         __exitCode = TraceRun();
         if (__exitCode) {
           _SaveCrashConfig(__pos, __highToMid, __exitCode);
-        } else { ++__cnt; }
+          ++__cnt;
+        }
         _ChangeByte(__pos, __tmp, false);
         --__highToMid;
 
