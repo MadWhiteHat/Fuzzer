@@ -15,6 +15,11 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <MASM Include="shellcode.asm">
+      <Filter>Source Files</Filter>
+    </MASM>
+  </ItemGroup>
+  <ItemGroup>
     <ClCompile Include="shellcode_gen.c">
       <Filter>Source Files</Filter>
     </ClCompile>
